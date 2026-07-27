@@ -1,0 +1,88 @@
+# -*- coding: utf-8 -*-
+"""
+service.py  ---  โหมด service (รันบน cloud ให้ n8n เรียกผ่าน HTTP)
+POST /generate   body JSON:
+{
+  "campaign": "แคมเปญลดราคากลางปี 2569",
+  "month": "กรกฎาคม 2569",
+  "branches": [
+     {"name": "01 สาขาเซ็นทรัลลาดพร้าว", "note": "", "photos": ["https://...jpg", ...]},
+     ...
+  ]
+}
+คืนไฟล์ .pptx กลับไป (binary)  — n8n เอาไปแนบอีเมล/อัปโหลด Drive ต่อได้เลย
+
+ความปลอดภัย: ถ้าตั้ง env API_KEY ไว้ ต้องส่ง header  X-API-KEY  ให้ตรงกัน
+"""
+import os
+import tempfile
+import requests
+from flask import Flask, request, jsonify, send_file
+from deck_core import build_deck
+
+app = Flask(__name__)
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE = os.path.join(HERE, "template.pptx")
+API_KEY = os.environ.get("API_KEY", "")          # ตั้งใน cloud เพื่อกันคนอื่นยิง
+MAX_PHOTOS = int(os.environ.get("MAX_PHOTOS", "400"))
+
+
+def _download(url, dest):
+    r = requests.get(url, timeout=30, stream=True)
+    r.raise_for_status()
+    with open(dest, "wb") as f:
+        for chunk in r.iter_content(8192):
+            f.write(chunk)
+
+
+@app.get("/health")
+def health():
+    return jsonify(status="ok")
+
+
+@app.post("/generate")
+def generate():
+    if API_KEY and request.headers.get("X-API-KEY", "") != API_KEY:
+        return jsonify(error="unauthorized"), 401
+
+    data = request.get_json(force=True, silent=True) or {}
+    campaign = data.get("campaign", "แคมเปญหน้าร้าน")
+    month = data.get("month", "")
+    branches_in = data.get("branches", [])
+    if not branches_in:
+        return jsonify(error="no branches"), 400
+
+    with tempfile.TemporaryDirectory() as tmp:
+        branches = []
+        count = 0
+        for bi, b in enumerate(branches_in):
+            local = []
+            for pi, url in enumerate(b.get("photos", [])):
+                if count >= MAX_PHOTOS:
+                    break
+                ext = ".png" if ".png" in url.lower() else ".jpg"
+                dest = os.path.join(tmp, f"b{bi}_{pi}{ext}")
+                try:
+                    _download(url, dest)
+                    local.append(dest)
+                    count += 1
+                except Exception as e:
+                    app.logger.warning("download failed %s: %s", url, e)
+            branches.append({"name": b.get("name", f"สาขา {bi+1}"),
+                             "note": b.get("note", ""),
+                             "photos": local})
+
+        safe = "".join(ch if ch.isalnum() or ch in " _-" else "_"
+                       for ch in f"{campaign} {month}").strip() or "deck"
+        out = os.path.join(tmp, safe + ".pptx")
+        total, missing = build_deck(branches, campaign, month, TEMPLATE, out)
+        app.logger.info("built deck: %d photos, missing=%s", total, missing)
+        return send_file(
+            out, as_attachment=True,
+            download_name=safe + ".pptx",
+            mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8080")))
