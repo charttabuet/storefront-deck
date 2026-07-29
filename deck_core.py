@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-deck_core.py  ---  แกนกลางสร้างสไลด์ (ใช้ร่วมกันทั้งโหมดโฟลเดอร์และโหมด service)
+deck_core.py  ---  แกนกลางสร้างสไลด์ (ธีมขาว-แดง Tefal)
 build_deck(branches, campaign, month, template_path, out_path)
-  branches = [ {"name": "01 สาขา...", "note": "...", "photos": [path1, path2, ...]}, ... ]
+  branches = [ {"name": "สาขา...", "note": "...", "photos": [path1, path2, ...]}, ... ]
+
+*** ปรับสีแบรนด์ได้ที่ตัวแปรด้านล่างนี้ที่เดียว ***
 """
 import os
 from PIL import Image
@@ -12,14 +14,17 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
-BRAND_DARK  = RGBColor(0x14, 0x1B, 0x2E)
-BRAND_MAIN  = RGBColor(0x29, 0x62, 0xFF)
-BRAND_LIGHT = RGBColor(0xCA, 0xDC, 0xFC)
-WARN        = RGBColor(0xE8, 0x7A, 0x1E)
-GREY        = RGBColor(0x6B, 0x72, 0x80)
-BORDER      = RGBColor(0xDD, 0xDD, 0xDD)
-WHITE       = RGBColor(0xFF, 0xFF, 0xFF)
-FONT        = "Tahoma"
+# ================== ธีมสี (แก้ตรงนี้) ==================
+RED       = RGBColor(0xE2, 0x00, 0x1A)   # แดง Tefal (สีหลัก)
+RED_DK    = RGBColor(0xB3, 0x00, 0x15)   # แดงเข้ม (accent)
+WHITE     = RGBColor(0xFF, 0xFF, 0xFF)
+DARK      = RGBColor(0x22, 0x22, 0x22)   # ข้อความเข้ม
+GREY      = RGBColor(0x6B, 0x72, 0x80)   # ข้อความจาง / ฟุตเตอร์
+LIGHTRED  = RGBColor(0xFF, 0xD6, 0xDA)   # ชมพูอ่อน (ป้ายบนแถบแดง)
+BORDER    = RGBColor(0xDD, 0xDD, 0xDD)   # ขอบรูป
+MISS      = RGBColor(0x9A, 0x9A, 0x9A)   # เทา (สไลด์แจ้งไม่มีรูป)
+FONT      = "Tahoma"
+# =====================================================
 
 MAX_PER_SLIDE = 6
 SLIDE_W, SLIDE_H = 13.333, 7.5
@@ -84,14 +89,34 @@ def _footer(slide, campaign, month, page_no):
           align=PP_ALIGN.RIGHT)
 
 
+def _cover_slide(prs, layout, campaign, month):
+    slide = prs.slides.add_slide(layout)
+    # พื้นปกแดงเต็มจอ
+    _rect(slide, 0, 0, SLIDE_W, SLIDE_H, RED)
+    # บล็อกแดงเข้มมุมขวาบน เป็น motif
+    _rect(slide, 10.6, 0, 2.733, 2.6, RED_DK)
+    # หัวเรื่องเล็ก
+    _text(slide, 0.9, 2.0, 11, 0.6, "รายงานภาพหน้าร้าน • CAMPAIGN REPORT",
+          18, WHITE, bold=True)
+    # ชื่อแคมเปญ
+    _text(slide, 0.9, 2.7, 11.5, 1.8, campaign, 46, WHITE, bold=True,
+          anchor=MSO_ANCHOR.TOP)
+    # เดือน
+    _text(slide, 0.9, 4.6, 11, 0.8, month, 26, LIGHTRED)
+    # ฟุตเตอร์
+    _text(slide, 0.9, 6.6, 11, 0.5, "จัดทำโดยทีม Sales • สร้างอัตโนมัติด้วยระบบ",
+          12, LIGHTRED)
+    return slide
+
+
 def _branch_slide(prs, layout, branch, imgs, page_idx, page_total, note,
                   campaign, month, page_no):
     slide = prs.slides.add_slide(layout)
-    _rect(slide, 0, 0, SLIDE_W, BAND_H, BRAND_MAIN)
+    _rect(slide, 0, 0, SLIDE_W, BAND_H, RED)
     title = branch + (f"  ({page_idx}/{page_total})" if page_total > 1 else "")
     _text(slide, 0.5, 0.05, 9.8, BAND_H - 0.1, title, 26, WHITE, bold=True)
     _text(slide, SLIDE_W - 3.3, 0.05, 2.8, BAND_H - 0.1, f"{len(imgs)} รูป",
-          14, BRAND_LIGHT, bold=True, align=PP_ALIGN.RIGHT)
+          14, LIGHTRED, bold=True, align=PP_ALIGN.RIGHT)
 
     area_t, area_h = AREA_T, AREA_H
     if note and page_idx == 1:
@@ -112,36 +137,22 @@ def _branch_slide(prs, layout, branch, imgs, page_idx, page_total, note,
 
 def _missing_slide(prs, layout, branch, campaign, month, page_no):
     slide = prs.slides.add_slide(layout)
-    _rect(slide, 0, 0, SLIDE_W, BAND_H, WARN)
+    _rect(slide, 0, 0, SLIDE_W, BAND_H, MISS)
     _text(slide, 0.5, 0.05, 12.3, BAND_H - 0.1, branch, 26, WHITE, bold=True)
     _text(slide, 0.5, 3.1, AREA_W, 1.2, "⚠  ยังไม่มีรูปส่งเข้ามาสำหรับสาขานี้",
-          24, WARN, bold=True, align=PP_ALIGN.CENTER)
+          24, MISS, bold=True, align=PP_ALIGN.CENTER)
     _footer(slide, campaign, month, page_no)
 
 
-def _fill_cover(prs, campaign, month):
-    if not prs.slides:
-        return
-    repl = {"{{CAMPAIGN}}": campaign, "{{MONTH}}": month}
-    for shape in prs.slides[0].shapes:
-        if not shape.has_text_frame:
-            continue
-        for para in shape.text_frame.paragraphs:
-            for run in para.runs:
-                for k, v in repl.items():
-                    if k in run.text:
-                        run.text = run.text.replace(k, v)
-
-
 def build_deck(branches, campaign, month, template_path, out_path):
-    """สร้าง .pptx จากรายการสาขา  คืนค่า (จำนวนรูปรวม, [สาขาที่ไม่มีรูป])"""
-    prs = (Presentation(template_path)
-           if template_path and os.path.exists(template_path) else Presentation())
-    if prs.slide_width != Inches(13.333):
-        prs.slide_width = Inches(13.333)
-        prs.slide_height = Inches(7.5)
-    layout = prs.slide_layouts[6]
-    _fill_cover(prs, campaign, month)
+    """สร้าง .pptx จากรายการสาขา  คืนค่า (จำนวนรูปรวม, [สาขาที่ไม่มีรูป])
+    (สร้างสไลด์ปกในโค้ดเอง ไม่ต้องพึ่ง template.pptx แล้ว)"""
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    layout = prs.slide_layouts[6]   # blank
+
+    _cover_slide(prs, layout, campaign, month)
 
     page_no, total, missing = 1, 0, []
     for b in branches:
