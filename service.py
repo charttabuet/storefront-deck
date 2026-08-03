@@ -15,6 +15,7 @@ POST /generate   body JSON:
 ความปลอดภัย: ถ้าตั้ง env API_KEY ไว้ ต้องส่ง header  X-API-KEY  ให้ตรงกัน
 """
 import os
+import time
 import tempfile
 import requests
 from flask import Flask, request, jsonify, send_file
@@ -25,14 +26,34 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE = os.path.join(HERE, "template.pptx")
 API_KEY = os.environ.get("API_KEY", "")          # ตั้งใน cloud เพื่อกันคนอื่นยิง
 MAX_PHOTOS = int(os.environ.get("MAX_PHOTOS", "400"))
+DL_TRIES = int(os.environ.get("DL_TRIES", "4"))  # ลองโหลดรูปซ้ำกี่ครั้งถ้าพลาด
+# บาง endpoint (เช่น googleusercontent) เมิน request ที่ไม่มี User-Agent
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 
 def _download(url, dest):
-    r = requests.get(url, timeout=30, stream=True)
-    r.raise_for_status()
-    with open(dest, "wb") as f:
-        for chunk in r.iter_content(8192):
-            f.write(chunk)
+    """โหลดรูป พร้อม retry + backoff กันรูปหายเวลา Drive ตอบช้า/ติด rate-limit"""
+    last = None
+    for attempt in range(DL_TRIES):
+        try:
+            r = requests.get(url, timeout=45, stream=True,
+                             headers={"User-Agent": _UA})
+            # 429/5xx = ชั่วคราว -> ลองใหม่;  4xx อื่น ๆ = ถาวร -> เลิก
+            if r.status_code in (429, 500, 502, 503, 504):
+                raise requests.HTTPError(f"transient {r.status_code}")
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(8192):
+                    f.write(chunk)
+            if os.path.getsize(dest) > 0:
+                return
+            raise IOError("empty file")
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if attempt < DL_TRIES - 1:
+                time.sleep(1.5 * (attempt + 1))   # 1.5s, 3s, 4.5s ...
+    raise last
 
 
 @app.get("/health")

@@ -40,6 +40,21 @@ def _grid_for(n):
             4: (2, 2), 5: (3, 2), 6: (3, 2)}[n]
 
 
+def _title_size(text, base=26, min_size=14):
+    """ย่อขนาดฟอนต์หัวข้ออัตโนมัติ เผื่อชื่อยาว (ลูกค้า+สาขา+กิจกรรม)
+    ให้พอดีในแถบสีบนสไลด์ ไม่ล้นออกนอกกรอบ"""
+    n = len(text or "")
+    if n <= 26:
+        return base
+    if n <= 36:
+        return 22
+    if n <= 48:
+        return 18
+    if n <= 64:
+        return 16
+    return min_size
+
+
 def _text(slide, l, t, w, h, text, size, color, bold=False,
           align=PP_ALIGN.LEFT, anchor=MSO_ANCHOR.MIDDLE):
     tb = slide.shapes.add_textbox(Inches(l), Inches(t), Inches(w), Inches(h))
@@ -114,7 +129,8 @@ def _branch_slide(prs, layout, branch, imgs, page_idx, page_total, note,
     slide = prs.slides.add_slide(layout)
     _rect(slide, 0, 0, SLIDE_W, BAND_H, RED)
     title = branch + (f"  ({page_idx}/{page_total})" if page_total > 1 else "")
-    _text(slide, 0.5, 0.05, 9.8, BAND_H - 0.1, title, 26, WHITE, bold=True)
+    _text(slide, 0.5, 0.05, 9.8, BAND_H - 0.1, title, _title_size(title),
+          WHITE, bold=True)
     _text(slide, SLIDE_W - 3.3, 0.05, 2.8, BAND_H - 0.1, f"{len(imgs)} รูป",
           14, LIGHTRED, bold=True, align=PP_ALIGN.RIGHT)
 
@@ -138,7 +154,8 @@ def _branch_slide(prs, layout, branch, imgs, page_idx, page_total, note,
 def _missing_slide(prs, layout, branch, campaign, month, page_no):
     slide = prs.slides.add_slide(layout)
     _rect(slide, 0, 0, SLIDE_W, BAND_H, MISS)
-    _text(slide, 0.5, 0.05, 12.3, BAND_H - 0.1, branch, 26, WHITE, bold=True)
+    _text(slide, 0.5, 0.05, 12.3, BAND_H - 0.1, branch, _title_size(branch),
+          WHITE, bold=True)
     _text(slide, 0.5, 3.1, AREA_W, 1.2, "⚠  ยังไม่มีรูปส่งเข้ามาสำหรับสาขานี้",
           24, MISS, bold=True, align=PP_ALIGN.CENTER)
     _footer(slide, campaign, month, page_no)
