@@ -104,14 +104,15 @@ def _footer(slide, campaign, month, page_no):
           align=PP_ALIGN.RIGHT)
 
 
-def _cover_slide(prs, layout, campaign, month):
+def _cover_slide(prs, layout, campaign, month, kicker=None):
     slide = prs.slides.add_slide(layout)
     # พื้นปกแดงเต็มจอ
     _rect(slide, 0, 0, SLIDE_W, SLIDE_H, RED)
     # บล็อกแดงเข้มมุมขวาบน เป็น motif
     _rect(slide, 10.6, 0, 2.733, 2.6, RED_DK)
-    # หัวเรื่องเล็ก
-    _text(slide, 0.9, 2.0, 11, 0.6, "รายงานภาพหน้าร้าน • CAMPAIGN REPORT",
+    # หัวเรื่องเล็ก (ส่ง kicker มาจาก payload ได้ ถ้าไม่ส่งใช้ค่าเดิม)
+    _text(slide, 0.9, 2.0, 11, 0.6,
+          kicker or "รายงานภาพหน้าร้าน • CAMPAIGN REPORT",
           18, WHITE, bold=True)
     # ชื่อแคมเปญ
     _text(slide, 0.9, 2.7, 11.5, 1.8, campaign, 46, WHITE, bold=True,
@@ -161,7 +162,7 @@ def _missing_slide(prs, layout, branch, campaign, month, page_no):
     _footer(slide, campaign, month, page_no)
 
 
-def build_deck(branches, campaign, month, template_path, out_path):
+def build_deck(branches, campaign, month, template_path, out_path, kicker=None):
     """สร้าง .pptx จากรายการสาขา  คืนค่า (จำนวนรูปรวม, [สาขาที่ไม่มีรูป])
     (สร้างสไลด์ปกในโค้ดเอง ไม่ต้องพึ่ง template.pptx แล้ว)"""
     prs = Presentation()
@@ -169,7 +170,7 @@ def build_deck(branches, campaign, month, template_path, out_path):
     prs.slide_height = Inches(7.5)
     layout = prs.slide_layouts[6]   # blank
 
-    _cover_slide(prs, layout, campaign, month)
+    _cover_slide(prs, layout, campaign, month, kicker)
 
     page_no, total, missing = 1, 0, []
     for b in branches:

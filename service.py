@@ -69,6 +69,7 @@ def generate():
     data = request.get_json(force=True, silent=True) or {}
     campaign = data.get("campaign", "แคมเปญหน้าร้าน")
     month = data.get("month", "")
+    kicker = data.get("kicker", "")          # ข้อความบรรทัดเล็กบนหน้าปก
     branches_in = data.get("branches", [])
     if not branches_in:
         return jsonify(error="no branches"), 400
@@ -96,7 +97,8 @@ def generate():
         safe = "".join(ch if ch.isalnum() or ch in " _-" else "_"
                        for ch in f"{campaign} {month}").strip() or "deck"
         out = os.path.join(tmp, safe + ".pptx")
-        total, missing = build_deck(branches, campaign, month, TEMPLATE, out)
+        total, missing = build_deck(branches, campaign, month, TEMPLATE, out,
+                                    kicker=kicker)
         app.logger.info("built deck: %d photos, missing=%s", total, missing)
         return send_file(
             out, as_attachment=True,
